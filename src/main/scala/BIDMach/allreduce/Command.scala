@@ -418,7 +418,6 @@ extends Command(Command.callCtype, round0, dest0, bytes.size, bytes, bytes.size)
   val sockClsLoader = new SocketClassLoader(Thread.currentThread().getContextClassLoader())
   var func = func0;
 
-  //def this(round0:Int, dest0:Int, callable0:Callable[AnyRef], class0:Class[_ <:Callable[AnyRef]]) = {
   def this(round0:Int, dest0:Int, func0:(Worker) => AnyRef) = {
     this(round0, dest0, func0, {
       val out  = new ByteArrayOutputStream()
@@ -428,14 +427,9 @@ extends Command(Command.callCtype, round0, dest0, bytes.size, bytes, bytes.size)
       val fooCls = func0.getClass()
       val cleanClassName = fooCls.getName.replaceFirst("^.*\\.", "") + ".class"
       val fooClsStream = fooCls.getResourceAsStream(cleanClassName)
-      //val fooClsBytes = org.apache.commons.io.IOUtils.toByteArray(fooClsStream)
-      //val fooClsBytes = fooClsStream.readAllBytes();
       val fooClsBytes = IOUtils.toByteArray(fooClsStream)
-      // val fooClsBytes = Stream.continually(fooClsStream.read()).takeWhile(_ != -1).map(_.toByte).toArray;
-
 
       val clsName = fooCls.getName
-      //byte[] bytes = ByteBuffer.allocate(4).putInt(1695609641).array();
       out.write(ByteBuffer.allocate(4).putInt(clsName.length).array(),0,4);
       out.write(clsName.getBytes(StandardCharsets.UTF_8), 0, clsName.length);
       out.write(ByteBuffer.allocate(4).putInt(fooClsBytes.length).array(),0,4);
@@ -466,7 +460,6 @@ extends Command(Command.callCtype, round0, dest0, bytes.size, bytes, bytes.size)
     val cls_bytes = new Array[Byte](cls_len);
     in.read(cls_bytes,0,cls_len);
 
-    // val transformedClsBytes = ClosureCleaner.readAndTransformClass(clsName, cls_bytes);
     val fooCls = sockClsLoader.defineClass(clsName, cls_bytes);
 
     func = fooCls.newInstance.asInstanceOf[(Worker) => AnyRef]

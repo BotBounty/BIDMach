@@ -34,7 +34,7 @@ class Master(override val opts:Master.Opts = new Master.Options) extends Host {
   var results:Array[AnyRef] = null;
   var masterIP:InetAddress = null;
   var nresults = 0;
-  var timer_for_distr:Long = 0;
+  var allreduceTimer:Long = 0;
 
   def init() {
     masterIP = InetAddress.getLocalHost;
@@ -81,13 +81,13 @@ class Master(override val opts:Master.Opts = new Master.Options) extends Host {
   def stopUpdates() {
     reducer.stop = true;
     reduceTask.cancel(true);
-    log("Total time for distributed version is %d\n" format (System.currentTimeMillis-timer_for_distr));
+    log("Total time of the distributed version is %d\n" format (System.currentTimeMillis-allreduceTimer));
   }
 
   def startLearners() {
     val cmd = new StartLearnerCommand(round, 0);
     broadcastCommand(cmd);
-    timer_for_distr = System.currentTimeMillis;
+    allreduceTimer = System.currentTimeMillis;
   }
 
   def permuteAllreduce(round:Int, limit:Int) {
@@ -211,35 +211,30 @@ class Master(override val opts:Master.Opts = new Master.Options) extends Host {
 	} else {
 	  new AllreduceCommand(round, 0, limit);
 	}
-  listener.allreduce_collected = 0
+  listener.allreduceCollected = 0
 	broadcastCommand(cmd);
 
-  
   val t0 = System.currentTimeMillis;
   var t = System.currentTimeMillis;
-  log("threshold is: %5.2f\n" format opts.machine_threshold*M);
-  var flag = true;
+  if (opts.trace > 1) log("The threshold is: %5.2f\n" format opts.machineThreshold*M);
+  var waiting = true;
 
-  while(flag){
-    //Check the result every 100 ms
-    Thread.sleep(100);
+  while(waiting){
+    Thread.sleep(100); //Check the result every 100 ms
     t = System.currentTimeMillis;
-    log("current waiting time: %d \n" format t-t0);
-    log("listener.allreduce_collected: %d \n" format listener.allreduce_collected);
+    if (opts.trace > 1) log("Current waiting time: %d ms\n" format t-t0);
 
-    if((t-t0)< opts.min_time_to_wait_for_all){
-      if(listener.allreduce_collected == M) flag = false
+    if((t-t0)< opts.minWaitTime){
+      if(listener.allreduceCollected >= M) waiting = false;
     }
-    else if ((t-t0)< opts.time_threshold){
-      if(listener.allreduce_collected >= opts.machine_threshold*M) flag = false
+    else if ((t-t0)< opts.timeThresholdMsec){
+      if(listener.allreduceCollected >= opts.machineThreshold*M) waiting = false;
+      // May be replaced by Master.almostDone
     }
     else{
-      flag = false
+      waiting = false
     }
   }
-	//val timems = opts.intervalMsec + (limit * opts.timeScaleMsec).toInt;
-	//if (opts.trace > 2) log("Sleeping for %d msec\n" format timems);
-	//Thread.sleep(timems);
       round += 1;
       }
     }
@@ -291,7 +286,7 @@ class Master(override val opts:Master.Opts = new Master.Options) extends Host {
   class ResponseListener(val socketnum:Int, me:Master) extends Runnable {
     var stop = false;
     var ss:ServerSocket = null;
-    var allreduce_collected:Int = 0;
+    var allreduceCollected:Int = 0;
 
     def start() {
       try {
@@ -309,7 +304,7 @@ class Master(override val opts:Master.Opts = new Master.Options) extends Host {
 	  val scs = new ResponseReader(ss.accept(), me);
 	  if (opts.trace > 2) log("Command Listener got a message\n");
 	  val fut = executor.submit(scs);
-    log("allreduce_collected is now %d \n" format allreduce_collected);
+    if (opts.trace > 2) log(" %d allreduce responses collected.\n" format allreduceCollected);
 	} catch {
 	  case e:SocketException => {
 	    if (opts.trace > 0) log("Problem starting a socket reader\n%s" format Response.printStackTrace(e));
@@ -349,10 +344,9 @@ object Master {
     var timeScaleMsec = 1e-4f;
     var permuteAlways = true;
     var numThreads = 16;
-
-    var machine_threshold = 0.75;
-    var min_time_to_wait_for_all = 3000;
-    var time_threshold = 5000;
+    var machineThreshold = 0.75;
+    var minWaitTime = 3000;
+    var timeThresholdMsec = 5000;
   }
 
   class Options extends Opts {}
