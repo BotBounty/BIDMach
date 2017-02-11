@@ -144,13 +144,11 @@ class ResponseReader(socket:Socket, me:Master) extends Runnable {
       val response = new Response(rtype, round, dest, clen, new Array[Byte](blen), blen);
       if (me.opts.trace > 2) me.log("Master got packet %s\n" format (response.toString));
       istr.readFully(response.bytes, 0, blen);
-      if (rtype==Command.allreduceCtype){
-        me.listener.allreduce_collected += 1;
-        me.log("allreduce_collected inside ResponseReader: %d\n" format me.listener.allreduce_collected);
-      }
+      if (rtype==Command.allreduceCtype) me.listener.allreduceCollected += 1;
+      
       if (rtype==Command.learnerDoneCtype){
         me.stopUpdates();
-        me.log("Stopping allreduce update\n");
+        me.log("Stopping allreduce update!\n");
       }
     try {
       socket.close();
